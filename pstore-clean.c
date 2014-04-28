@@ -10,11 +10,12 @@
 #include <errno.h>
 #include <sys/mount.h>
 #include <linux/fs.h>
+#include <cutils/fs.h>
 
 #define LOG_TAG "pstore-clean"
 #include <cutils/log.h>
 #define MNT "/dev/pstore"
-#define DST "/data/kpanic/pstore"
+#define DST "/data/kpanic/pstore/" //fs_mkdirs needs the trailing slash
 #define BUFFER_SIZE 4096
 #define MAX_DIR_COUNT 1024
 #define MAX_COUNT 1024
@@ -98,9 +99,11 @@ int main()
     umask(0027);
     mkdir(MNT, 0755);
 
-    if (system("/system/bin/mkdir -p '"DST"'") != 0) {
-        ALOGE("Unable to create %s (%s)\n", DST, strerror(errno));
-    }
+    /* Create the dest. directory; however, if this fails, we still need to
+     * clean the pstore; otherwise the pstore may fill, and booting will fail */
+    rc = fs_mkdirs(DST, 0755);
+    if (rc != 0)
+        ALOGE("Unable to create %s (%s)\n", DST, strerror(-rc));
 
     struct dirent* dent = NULL;
     time_t cur_time = time(NULL);
@@ -133,7 +136,7 @@ int main()
         }
 
         do {
-            snprintf(dstpath, sizeof(dstpath), "%s/%s-%d", DST, date, n);
+            snprintf(dstpath, sizeof(dstpath), "%s%s-%d", DST, date, n);
         }while(!access(dstpath, F_OK) && ++n < MAX_DIR_COUNT);
 
         if (mkdir(dstpath, 0755) == -1)
