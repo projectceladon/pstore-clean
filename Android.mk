@@ -23,4 +23,8 @@ LOCAL_SHARED_LIBRARIES := libcutils
 LOCAL_MODULE := pstore-clean
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_OWNER := intel
+ifeq (true,$(TARGET_PREFER_32_BIT_EXECUTABLES))
+# We are doing a 32p build, force recovery to be 64bit
+LOCAL_MULTILIB := 64
+endif
 include $(BUILD_EXECUTABLE)
