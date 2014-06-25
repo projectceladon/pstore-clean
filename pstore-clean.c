@@ -15,7 +15,7 @@
 #define LOG_TAG "pstore-clean"
 #include <cutils/log.h>
 #define MNT "/dev/pstore"
-#define DST "/data/kpanic/pstore/" //fs_mkdirs needs the trailing slash
+#define DST "/data/dontpanic/apanic_console"
 #define BUFFER_SIZE 4096
 #define MAX_DIR_COUNT 1024
 #define MAX_COUNT 1024
@@ -25,21 +25,14 @@
  * in NVRAM and eventually fill storage.
  */
 
-int filecopy(const char *srcfile, const char *dstfile)
+int filecopy(const char *srcfile, int dstfd)
 {
-    int srcfd, dstfd, read_ret, write_ret;
+    int srcfd, read_ret, write_ret;
     char buffer[BUFFER_SIZE];
 
     srcfd = open(srcfile, O_RDONLY);
     if (srcfd == -1) {
         ALOGE("Open %s error: %s\n", srcfile, strerror(errno));
-        return -1;
-    }
-
-    dstfd = open(dstfile, O_WRONLY|O_CREAT, 0640);
-    if (dstfd == -1) {
-        close(srcfd);
-        ALOGE("Open %s error: %s\n", dstfile, strerror(errno));
         return -1;
     }
 
@@ -49,21 +42,18 @@ int filecopy(const char *srcfile, const char *dstfile)
         if (read_ret == -1) {
             ALOGE("Read %s error: %s\n", srcfile, strerror(errno));
             close(srcfd);
-            close(dstfd);
             return -1;
         }
 
         write_ret = write(dstfd, buffer, read_ret);
         if(write_ret == -1) {
-            ALOGE("Write %s error: %s\n", dstfile, strerror(errno));
+            ALOGE("Write error: %s\n", strerror(errno));
             close(srcfd);
-            close(dstfd);
             return -1;
         }
     } while(read_ret > 0 && write_ret > 0);
 
     close(srcfd);
-    close(dstfd);
     return 0;
 }
 
@@ -91,25 +81,15 @@ int main()
     int n = 0;
     int count = 0;
     int rc,status;
+    int dstfd = -1;
     char srcfile[256];
-    char dstpath[128];
-    char dstfile[256];
-    DIR* dir;
+    struct dirent **namelist = NULL;
+    int namelist_len = 0;
 
     umask(0027);
     mkdir(MNT, 0755);
 
-    /* Create the dest. directory; however, if this fails, we still need to
-     * clean the pstore; otherwise the pstore may fill, and booting will fail */
-    rc = fs_mkdirs(DST, 0755);
-    if (rc != 0)
-        ALOGE("Unable to create %s (%s)\n", DST, strerror(-rc));
-
     struct dirent* dent = NULL;
-    time_t cur_time = time(NULL);
-    struct tm *gmt = gmtime(&cur_time);
-    char date[12];
-    snprintf(date, sizeof(date), "%d-%d-%d", gmt->tm_year+1900, gmt->tm_mon+1, gmt->tm_mday);
 
     do {
         count++;
@@ -128,29 +108,26 @@ int main()
             umount(MNT);
             break;
         }
-        dir = opendir(MNT);
 
-        if (!dir) {
-            ALOGE("Opendir %s failed (%s)", MNT, strerror(errno));
+        ALOGW("Kernel pstore crash dump found, copying to " DST "\n");
+
+        if ((dstfd = open(DST, O_CREAT | O_TRUNC | O_WRONLY, 0666)) < 0) {
+            ALOGE("Failed to open " DST " (%s)", strerror(errno));
             goto error2;
         }
 
-        do {
-            snprintf(dstpath, sizeof(dstpath), "%s%s-%d", DST, date, n);
-        }while(!access(dstpath, F_OK) && ++n < MAX_DIR_COUNT);
+        if ((namelist_len = scandir(MNT, &namelist, NULL, alphasort)) < 1) {
+            ALOGE("Failed to list " MNT " (%s)", strerror(errno));
+            goto error2;
+        }
 
-        if (mkdir(dstpath, 0755) == -1)
-            ALOGE("Unable to create %s (%s)\n", dstpath, strerror(errno));
-
-        ALOGW("Kernel pstore crash dump found, copying to %s\n", dstpath);
-
-        while((dent = readdir(dir))) {
+        for (n = namelist_len - 1; n >= 0; n--) {
+            dent = namelist[n];
             if ((strcmp(dent->d_name, ".") == 0) || (strcmp(dent->d_name, "..") == 0))
                 continue;
 
             snprintf(srcfile, sizeof(srcfile), "%s/%s", MNT, dent->d_name);
-            snprintf(dstfile, sizeof(dstfile), "%s/%s", dstpath, dent->d_name);
-            if (filecopy(srcfile, dstfile) == -1) {
+            if (filecopy(srcfile, dstfd) == -1) {
                 ALOGE("Copy file %s failed (%s)", srcfile, strerror(errno));
             }
             if (unlink(srcfile) != 0) {
@@ -158,7 +135,6 @@ int main()
                 goto error3;
             }
         }
-        closedir(dir);
         if (umount(MNT)) {
             ALOGE("Umount %s failed (%s)", srcfile, strerror(errno));
             goto error1;
@@ -172,9 +148,15 @@ int main()
     return 0;
 
 error3:
-    closedir(dir);
+    for (n = 0; n < namelist_len; n++) {
+        free(namelist[n]);
+    }
+    free(namelist);
 
 error2:
+    if (dstfd >= 0)
+        close(dstfd);
+
     if (umount(MNT))
         ALOGE("Umount %s failed (%s)", srcfile, strerror(errno));
 
