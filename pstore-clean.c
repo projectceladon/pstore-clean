@@ -37,7 +37,7 @@ int filecopy(const char *srcfile, int dstfd)
     }
 
     do {
-        memset(buffer, BUFFER_SIZE, 0);
+        memset(buffer, 0, BUFFER_SIZE);
         read_ret = read(srcfd, buffer, BUFFER_SIZE);
         if (read_ret == -1) {
             ALOGE("Read %s error: %s\n", srcfile, strerror(errno));
