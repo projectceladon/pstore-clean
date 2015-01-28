@@ -76,26 +76,42 @@ int dir_not_empty(char* path)
     return 0; //dir is empty
 }
 
+int is_fs_mounted(char* path)
+{
+    FILE* proc_mounts = NULL;
+    char part [PAGE_SIZE];
+    int is_mounted = 0;
+
+    if ((proc_mounts = fopen("/proc/mounts", "r")) != NULL) {
+        while (fgets(part, PAGE_SIZE, proc_mounts) != NULL) {
+            if (strstr(part, path) != NULL) {
+                is_mounted = 1;
+                break;
+            }
+        }
+        fclose(proc_mounts);
+    }
+    return is_mounted;
+}
+
 int main()
 {
     int n = 0;
     int count = 0;
-    int rc,status;
+    int status;
     int dstfd = -1;
     char srcfile[256];
     struct dirent **namelist = NULL;
     int namelist_len = 0;
 
     umask(0027);
-    mkdir(MNT, 0755);
 
     struct dirent* dent = NULL;
 
     do {
         count++;
-        rc = mount("pstore", MNT, "pstore", 0, NULL);
-        if (rc) {
-            ALOGE("Mount pstore failed (%s)", strerror(errno));
+        if (!is_fs_mounted(MNT)) {
+            ALOGE("Pstore fs isn't mounted. Exiting.");
             goto error1;
         }
         status = dir_not_empty(MNT);
@@ -105,7 +121,6 @@ int main()
         }
         else if (status == 0) {
             ALOGI("Pstore is clean.");
-            umount(MNT);
             break;
         }
 
@@ -135,12 +150,12 @@ int main()
                 goto error3;
             }
         }
-        if (umount(MNT)) {
-            ALOGE("Umount %s failed (%s)", srcfile, strerror(errno));
-            goto error1;
-        }
-
     } while(status > 0 && count < MAX_COUNT);
+
+    if (umount(MNT)) {
+        ALOGE("Umount %s failed (%s)", srcfile, strerror(errno));
+        goto error1;
+    }
 
     if (rmdir(MNT))
         ALOGE("Remove dir %s failed (%s)", MNT, strerror(errno));
