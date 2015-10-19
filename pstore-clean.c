@@ -17,7 +17,8 @@
 #define LOG_TAG "pstore-clean"
 #include <cutils/log.h>
 #define MNT "/dev/pstore"
-#define DST "/data/dontpanic/apanic_console"
+#define DST_DIR "/data/dontpanic"
+#define DST DST_DIR"/apanic_console"
 #define BUFFER_SIZE 4096
 #define PSTORE_CLEAN_VENDOR_CONFIG_FILE "/vendor/etc/pstore-clean.conf"
 
@@ -176,6 +177,29 @@ static int perform_rule_check(cnode *root, char *filename,
     return 0;
 }
 
+static void cleanup_dir(const char *path)
+{
+    char srcpath[PATH_MAX];
+    struct dirent* dent;
+    DIR* dir;
+    if ((dir = opendir(path)) == NULL) {
+        ALOGE("Opendir %s failed (%s)", path, strerror(errno));
+        return;
+    }
+
+    while ((dent = readdir(dir)) != NULL) {
+        /* Only remove regular files */
+        if (dent->d_type != DT_REG)
+            continue;
+
+        snprintf(srcpath, sizeof(srcpath), "%s/%s", path, dent->d_name);
+        if (unlink(srcpath) != 0)
+            ALOGE("Remove %s failed (%s)", srcpath, strerror(errno));
+    }
+
+    closedir(dir);
+}
+
 int main()
 {
     int n = 0;
@@ -220,10 +244,7 @@ int main()
 
     ALOGW("Kernel pstore crash dump found, copying to " DST "\n");
 
-    if (file_exists(DST) && unlink(DST) != 0) {
-        ALOGE("Remove %s failed (%s)", DST, strerror(errno));
-        goto error2;
-    }
+    cleanup_dir(DST_DIR);
 
     if ((namelist_len = scandir(MNT, &namelist, NULL, alphasort)) < 1) {
         ALOGE("Failed to list " MNT " (%s)", strerror(errno));
