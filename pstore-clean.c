@@ -230,6 +230,7 @@ int main()
 
     if (!is_fs_mounted(MNT)) {
         ALOGE("Pstore fs isn't mounted. Exiting.");
+        status = -1;
         goto error1;
     }
     status = dir_not_empty(MNT);
@@ -306,19 +307,6 @@ int main()
         }
     }
 
-done:
-    if (umount(MNT)) {
-        ALOGE("Umount %s failed (%s)", MNT, strerror(errno));
-        goto error1;
-    }
-
-    if (root)
-        config_free(root);
-
-    if (rmdir(MNT))
-        ALOGE("Remove dir %s failed (%s)", MNT, strerror(errno));
-
-    return 0;
 
 error3:
     for (n = 0; n < namelist_len; n++) {
@@ -330,16 +318,21 @@ error2:
     if (dstfd >= 0)
         close(dstfd);
 
-    if (umount(MNT))
+done:
+    if (umount(MNT)) {
+        status = -1;
         ALOGE("Umount %s failed (%s)", MNT, strerror(errno));
+    }
 
 error1:
-    if (root)
+    if (root) {
         config_free(root);
+        free(root);
+    }
 
-    if (rmdir(MNT))
+    if (rmdir(MNT)) {
+        status = -1;
         ALOGE("Remove dir %s failed (%s)", MNT, strerror(errno));
-
-    ALOGE("Clean pstore failed.\n");
-    return -1;
+    }
+    return status;
 }
