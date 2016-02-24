@@ -36,13 +36,6 @@ typedef enum {
     MOVE
 } pstore_action;
 
-static inline int file_exists(const char *filename)
-{
-    struct stat info;
-
-    return (stat(filename, &info) == 0);
-}
-
 static int filecopy(const char *srcfile, int dstfd)
 {
     int srcfd, read_ret, write_ret;
