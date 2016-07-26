@@ -312,20 +312,11 @@ error2:
         close(dstfd);
 
 done:
-    if (umount(MNT)) {
-        status = -1;
-        ALOGE("Umount %s failed (%s)", MNT, strerror(errno));
-    }
-
 error1:
     if (root) {
         config_free(root);
         free(root);
     }
 
-    if (rmdir(MNT)) {
-        status = -1;
-        ALOGE("Remove dir %s failed (%s)", MNT, strerror(errno));
-    }
     return status;
 }
