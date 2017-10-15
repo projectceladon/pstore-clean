@@ -93,7 +93,6 @@ static int is_fs_mounted(char* path)
     char part [PAGE_SIZE];
     int is_mounted = 0;
 
-    memset(part,0,PAGE_SIZE);
     if ((proc_mounts = fopen("/proc/mounts", "r")) != NULL) {
         while (fgets(part, PAGE_SIZE, proc_mounts) != NULL) {
             if (strstr(part, path) != NULL) {
