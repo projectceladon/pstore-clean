@@ -15,7 +15,7 @@
 #include <ctype.h>
 
 #define LOG_TAG "pstore-clean"
-#include <cutils/log.h>
+#include <log/log.h>
 #define MNT "/dev/pstore"
 #define DST_DIR "/data/dontpanic"
 #define DST DST_DIR"/apanic_console"
