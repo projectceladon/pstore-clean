@@ -24,10 +24,6 @@ LOCAL_MODULE := pstore-clean
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_OWNER := intel
 LOCAL_REQUIRED_MODULES := pstore-clean.conf
-ifeq (true,$(TARGET_PREFER_32_BIT_EXECUTABLES))
-# We are doing a 32p build, force recovery to be 64bit
-LOCAL_MULTILIB := 64
-endif
 LOCAL_PROPRIETARY_MODULE := true
 include $(BUILD_EXECUTABLE)
 
